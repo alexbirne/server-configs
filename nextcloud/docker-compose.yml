@@ -1,0 +1,76 @@
+services:
+  
+  postgres:
+    container_name: postgres
+    image: postgres:17
+    restart: always
+    volumes:
+      - /data/postgres:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=${DB_NAME}
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+    networks:
+      - nextcloud
+  
+  cache:
+    image: valkey/valkey:8
+    container_name: valkey
+    restart: always
+    networks:
+      - nextcloud
+
+  nextcloud:
+    container_name: nextcloud
+    image: nextcloud:31
+    restart: always
+    volumes:
+      - /data/nextcloud:/var/www/html:z
+    environment:
+      - POSTGRES_DB=${DB_NAME}
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_HOST=postgres
+      - REDIS_HOST=valkey
+    depends_on:
+      - postgres
+      - cache
+    networks:
+      - reverse-proxy
+      - nextcloud
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.services.nextcloud.loadbalancer.server.port=80"
+      
+      - "traefik.http.middlewares.nextcloud-dav.redirectregex.regex=https://(.*)/.well-known/(?:card|cal)dav"
+      - "traefik.http.middlewares.nextcloud-dav.redirectregex.replacement=https://${NEXTCLOUD_HOST}/remote.php/dav/"
+      - "traefik.http.middlewares.nextcloud-dav.redirectregex.permanent=true"
+
+      - "traefik.http.middlewares.nextcloud-header.headers.stsSeconds=15752000"
+      - "traefik.http.middlewares.nextcloud-header.headers.stsIncludeSubdomains=true"
+      - "traefik.http.middlewares.nextcloud-header.headers.stsPreload=true"
+      - "traefik.http.middlewares.nextcloud-header.headers.forceSTSHeader=true"
+      
+      - "traefik.docker.network=reverse-proxy"
+      - "traefik.http.routers.nextcloud.rule=Host(`${NEXTCLOUD_HOST}`)"
+      - "traefik.http.routers.nextcloud.entrypoints=websecure"
+      - "traefik.http.routers.nextcloud.tls.certresolver=le"
+      - "traefik.http.routers.nextcloud.middlewares=nextcloud-dav,nextcloud-header"
+
+  cron:
+    image: nextcloud:31
+    restart: always
+    container_name: nextcloud-cron
+    volumes:
+      - /data/nextcloud:/var/www/html:z
+    entrypoint: /cron.sh
+    depends_on:
+      - postgres
+      - cache
+    networks:
+      - nextcloud
+
+networks:
+  reverse-proxy:
+    external: true
+  nextcloud:
