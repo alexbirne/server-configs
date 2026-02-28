@@ -22,7 +22,7 @@ services:
 
   nextcloud:
     container_name: nextcloud
-    image: nextcloud:32
+    image: nextcloud:33
     restart: always
     volumes:
       - /data/nextcloud:/var/www/html:z
@@ -58,7 +58,7 @@ services:
       - "traefik.http.routers.nextcloud.middlewares=nextcloud-dav,nextcloud-header"
 
   cron:
-    image: nextcloud:32
+    image: nextcloud:33
     restart: always
     container_name: nextcloud-cron
     volumes:
